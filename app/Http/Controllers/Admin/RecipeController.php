@@ -108,7 +108,7 @@ class RecipeController extends Controller
     {
         $request->validate(['prompt' => 'required|string|max:255']);
         $promptUser = $request->input('prompt');
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = config('services.gemini.key');
 
         if (!$apiKey) {
             return response()->json(['error' => 'Falta tu API Key en el .env'], 500);
