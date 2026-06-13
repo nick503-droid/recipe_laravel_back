@@ -18,3 +18,5 @@ Route::resource('recipes', RecipeController::class);
 
 
 Route::post('categories/{id}/restore', [CategoryController::class, 'restore'])->name('categories.restore');
+
+Route::post('/generate-recipe-ai', [\App\Http\Controllers\Admin\RecipeController::class, 'generateAi']);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Recipe;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class RecipeController extends Controller
 {
@@ -22,7 +23,7 @@ class RecipeController extends Controller
         }
 
         $recipes = $query->paginate(10)->withQueryString();
-        
+
         // --- CAMBIO CLAVE 1 ---
         // Obtenemos TODAS las categorías (incluyendo las ocultas) para el filtro.
         $categories = Category::withTrashed()->orderBy('name')->get();
@@ -68,7 +69,7 @@ class RecipeController extends Controller
 
         $validatedData['ingredients'] = array_filter($request->ingredients ?? []);
         $validatedData['steps'] = array_filter($request->steps ?? []);
-        
+
         $recipe->update($validatedData);
 
         return redirect()->route('recipes.index');
@@ -101,5 +102,35 @@ class RecipeController extends Controller
             'carbohydrates' => 'nullable|integer',
             'fiber' => 'nullable|integer',
         ];
+    }
+
+    public function generateAi(Request $request)
+    {
+        $request->validate(['prompt' => 'required|string|max:255']);
+        $promptUser = $request->input('prompt');
+        $apiKey = env('GEMINI_API_KEY');
+
+        if (!$apiKey) {
+            return response()->json(['error' => 'Falta tu API Key en el .env'], 500);
+        }
+
+$systemPrompt = "Eres un chef. Crea una receta para: '$promptUser'. Devuelve SOLO un JSON válido con las llaves exactas en inglés: name, short_description, long_description, ingredients (array de strings), steps (array de strings), difficulty, prep_time, servings, calories (SOLO NUMEROS ENTEROS, sin 'kcal'), proteins (SOLO NUMEROS ENTEROS, sin 'g'), fats (SOLO NUMEROS ENTEROS), carbohydrates (SOLO NUMEROS ENTEROS), fiber (SOLO NUMEROS ENTEROS).";
+        try {
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$apiKey}", [
+                'contents' => [['parts' => [['text' => $systemPrompt]]]],
+                'generationConfig' => ['response_mime_type' => 'application/json']
+            ]);
+
+            $data = $response->json();
+
+            if (isset($data['error'])) throw new \Exception($data['error']['message']);
+
+            $recipeData = json_decode($data['candidates'][0]['content']['parts'][0]['text'], true);
+
+            return response()->json(['success' => true, 'recipe' => $recipeData]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error con la IA: ' . $e->getMessage()], 500);
+        }
     }
 }
